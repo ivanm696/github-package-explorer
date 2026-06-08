@@ -2,19 +2,23 @@ import { GitHubPackage, PackageRelease, SearchParams } from '../types/package';
 
 const GITHUB_API = 'https://api.github.com';
 
+interface GitHubSearchResponse {
+  items: GitHubPackage[];
+}
+
 function getHeaders(): HeadersInit {
   const headers: HeadersInit = {
     'Accept': 'application/vnd.github.v3+json',
   };
   const token = import.meta.env.VITE_GITHUB_TOKEN;
   if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+    (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
   }
   return headers;
 }
 
 export class GitHubService {
-  private static async fetchAPI(endpoint: string): Promise<any> {
+  private static async fetchAPI<T>(endpoint: string): Promise<T> {
     const response = await fetch(`${GITHUB_API}${endpoint}`, {
       headers: getHeaders(),
     });
@@ -26,31 +30,31 @@ export class GitHubService {
       throw new Error(`GitHub API error: ${response.statusText}`);
     }
 
-    return response.json();
+    return response.json() as Promise<T>;
   }
 
   static async searchPackages(params: SearchParams): Promise<GitHubPackage[]> {
     const { query, sort = 'stars', order = 'desc', page = 1 } = params;
     const searchQuery = `${query} in:name,description`;
-    const data = await this.fetchAPI(
+    const data = await this.fetchAPI<GitHubSearchResponse>(
       `/search/repositories?q=${encodeURIComponent(searchQuery)}&sort=${sort}&order=${order}&page=${page}&per_page=20`
     );
     return data.items || [];
   }
 
   static async getPackageDetails(owner: string, repo: string): Promise<GitHubPackage> {
-    return this.fetchAPI(`/repos/${owner}/${repo}`);
+    return this.fetchAPI<GitHubPackage>(`/repos/${owner}/${repo}`);
   }
 
   static async getPackageReleases(owner: string, repo: string): Promise<PackageRelease[]> {
-    return this.fetchAPI(`/repos/${owner}/${repo}/releases`);
+    return this.fetchAPI<PackageRelease[]>(`/repos/${owner}/${repo}/releases`);
   }
 
   static async getTrendingPackages(): Promise<GitHubPackage[]> {
     const oneWeekAgo = new Date();
     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
     const dateStr = oneWeekAgo.toISOString().split('T')[0];
-    const data = await this.fetchAPI(
+    const data = await this.fetchAPI<GitHubSearchResponse>(
       `/search/repositories?q=created:>${dateStr}&sort=stars&order=desc&per_page=20`
     );
     return data.items || [];
